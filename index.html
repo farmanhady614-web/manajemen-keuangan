@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Manajemen Keuangan Pribadi</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Chart.js untuk grafik -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Font Awesome untuk ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p>Memuat data...</p>
+    </div>
+
+    <!-- Auth Container (Login/Register) -->
+    <div id="authContainer" class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <i class="fas fa-wallet"></i>
+                <h2>Manajemen Keuangan</h2>
+                <p>Kelola keuanganmu dengan mudah</p>
+            </div>
+            
+            <!-- Tab Login/Register -->
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">Login</button>
+                <button class="auth-tab" data-tab="register">Daftar</button>
+            </div>
+
+            <!-- Form Login -->
+            <form id="loginForm" class="auth-form active">
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="loginEmail" placeholder="Email" required>
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn-auth">Login</button>
+                <button type="button" id="googleLoginBtn" class="btn-google">
+                    <i class="fab fa-google"></i> Login dengan Google
+                </button>
+            </form>
+
+            <!-- Form Register -->
+            <form id="registerForm" class="auth-form">
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="registerName" placeholder="Nama Lengkap" required>
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="registerEmail" placeholder="Email" required>
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="registerPassword" placeholder="Password (min. 6 karakter)" required>
+                </div>
+                <button type="submit" class="btn-auth">Daftar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App Container (setelah login) -->
+    <div id="appContainer" class="app-container hidden">
+        <!-- Header / Navbar -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <i class="fas fa-coins"></i>
+                <span>KeuanganKu</span>
+            </div>
+            <div class="nav-user">
+                <span id="userName">User</span>
+                <button id="logoutBtn" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Ringkasan -->
+            <div class="dashboard">
+                <div class="card saldo-card">
+                    <div class="card-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="card-info">
+                        <h3>Total Saldo</h3>
+                        <div class="amount" id="totalSaldo">Rp 0</div>
+                    </div>
+                </div>
+                <div class="card pemasukan-card">
+                    <div class="card-icon">
+                        <i class="fas fa-arrow-up"></i>
+                    </div>
+                    <div class="card-info">
+                        <h3>Total Pemasukan</h3>
+                        <div class="amount" id="totalPemasukan">Rp 0</div>
+                    </div>
+                </div>
+                <div class="card pengeluaran-card">
+                    <div class="card-icon">
+                        <i class="fas fa-arrow-down"></i>
+                    </div>
+                    <div class="card-info">
+                        <h3>Total Pengeluaran</h3>
+                        <div class="amount" id="totalPengeluaran">Rp 0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Input Transaksi -->
+            <div class="form-container card">
+                <h3><i class="fas fa-plus-circle"></i> Tambah Transaksi</h3>
+                <form id="transactionForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Jenis Transaksi</label>
+                            <div class="jenis-toggle">
+                                <button type="button" id="jenisPemasukan" class="jenis-btn active" data-jenis="pemasukan">
+                                    <i class="fas fa-arrow-up"></i> Pemasukan
+                                </button>
+                                <button type="button" id="jenisPengeluaran" class="jenis-btn" data-jenis="pengeluaran">
+                                    <i class="fas fa-arrow-down"></i> Pengeluaran
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Kategori</label>
+                            <select id="kategori">
+                                <optgroup label="Pemasukan">
+                                    <option value="Gaji">💰 Gaji</option>
+                                    <option value="Bonus">🎁 Bonus</option>
+                                    <option value="Investasi">📈 Investasi</option>
+                                    <option value="Lainnya">📌 Lainnya</option>
+                                </optgroup>
+                                <optgroup label="Pengeluaran">
+                                    <option value="Makanan">🍔 Makanan</option>
+                                    <option value="Transportasi">🚗 Transportasi</option>
+                                    <option value="Tagihan">📱 Tagihan</option>
+                                    <option value="Hiburan">🎬 Hiburan</option>
+                                    <option value="Kesehatan">🏥 Kesehatan</option>
+                                    <option value="Belanja">🛍️ Belanja</option>
+                                    <option value="Lainnya">📌 Lainnya</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nominal (Rp)</label>
+                            <input type="number" id="nominal" placeholder="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Tanggal</label>
+                            <input type="date" id="tanggal" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Keterangan</label>
+                        <input type="text" id="keterangan" placeholder="Contoh: Belanja bulanan, Gaji, dll">
+                    </div>
+                    <button type="submit" class="btn-submit">
+                        <i class="fas fa-save"></i> Simpan Transaksi
+                    </button>
+                </form>
+            </div>
+
+            <!-- Filter dan Grafik -->
+            <div class="filter-chart-row">
+                <!-- Filter Pencarian -->
+                <div class="filter-container card">
+                    <h3><i class="fas fa-filter"></i> Filter Transaksi</h3>
+                    <div class="filter-group">
+                        <input type="text" id="searchKeyword" placeholder="Cari keterangan atau kategori...">
+                        <input type="month" id="filterMonth">
+                        <select id="filterJenis">
+                            <option value="all">Semua Jenis</option>
+                            <option value="pemasukan">Pemasukan</option>
+                            <option value="pengeluaran">Pengeluaran</option>
+                        </select>
+                        <button id="resetFilterBtn" class="btn-reset-filter">
+                            <i class="fas fa-undo"></i> Reset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Grafik -->
+                <div class="chart-container card">
+                    <h3><i class="fas fa-chart-pie"></i> Grafik Pengeluaran Bulan Ini</h3>
+                    <canvas id="expenseChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Daftar Riwayat Transaksi -->
+            <div class="history-container card">
+                <h3><i class="fas fa-history"></i> Riwayat Transaksi</h3>
+                <div class="history-list" id="historyList">
+                    <div class="empty-state">
+                        <i class="fas fa-receipt"></i>
+                        <p>Belum ada transaksi. Tambahkan transaksi pertama Anda!</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Konfigurasi Firebase akan diisi nanti -->
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
