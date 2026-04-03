@@ -1,9 +1,9 @@
 // Konfigurasi Supabase
 // Ganti dengan kredensial Supabase Anda dari https://supabase.com
-import { createClient } from 'https://supabase.com/dashboard/project/gweivijtroaxsquotlae'
+import { createClient } from 'https://gweivijtroaxsquotlae.supabase.co'
 
 // TODO: Ganti dengan URL dan anon key dari project Supabase Anda
-const supabaseUrl = 'https://supabase.com/dashboard/project/gweivijtroaxsquotlae'
+const supabaseUrl = 'https://gweivijtroaxsquotlae.supabase.co'
 const supabaseAnonKey = 'gweivijtroaxsquotlae'
 
 // Inisialisasi Supabase client
