@@ -1,24 +1,118 @@
-import { 
-    auth, 
-    db, 
-    googleProvider, 
-    signInWithPopup, 
-    signOut, 
-    onAuthStateChanged,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    updateProfile,
-    collection, 
-    addDoc, 
-    deleteDoc, 
-    doc, 
-    query, 
-    where, 
-    orderBy,
-    onSnapshot
-} from './firebase-config.js';
+// ==================== STORAGE MANAGEMENT ====================
+class StorageManager {
+    constructor() {
+        this.initStorage();
+    }
 
-// State Management
+    initStorage() {
+        if (!localStorage.getItem('users')) {
+            localStorage.setItem('users', JSON.stringify([]));
+        }
+        if (!localStorage.getItem('transactions')) {
+            localStorage.setItem('transactions', JSON.stringify([]));
+        }
+    }
+
+    getUsers() {
+        return JSON.parse(localStorage.getItem('users') || '[]');
+    }
+
+    saveUsers(users) {
+        localStorage.setItem('users', JSON.stringify(users));
+    }
+
+    getTransactions() {
+        return JSON.parse(localStorage.getItem('transactions') || '[]');
+    }
+
+    saveTransactions(transactions) {
+        localStorage.setItem('transactions', JSON.stringify(transactions));
+    }
+
+    getCurrentUser() {
+        return JSON.parse(localStorage.getItem('currentUser') || 'null');
+    }
+
+    saveCurrentUser(user) {
+        if (user) {
+            localStorage.setItem('currentUser', JSON.stringify(user));
+        } else {
+            localStorage.removeItem('currentUser');
+        }
+    }
+}
+
+const storage = new StorageManager();
+
+// ==================== AUTH FUNCTIONS ====================
+function register(name, email, password) {
+    if (password.length < 6) {
+        throw new Error('Password minimal 6 karakter');
+    }
+
+    const users = storage.getUsers();
+    
+    if (users.find(u => u.email === email)) {
+        throw new Error('Email sudah terdaftar');
+    }
+
+    const newUser = {
+        id: Date.now().toString(),
+        name: name,
+        email: email,
+        password: password
+    };
+
+    users.push(newUser);
+    storage.saveUsers(users);
+    
+    return newUser;
+}
+
+function login(email, password) {
+    const users = storage.getUsers();
+    const user = users.find(u => u.email === email && u.password === password);
+    
+    if (!user) {
+        throw new Error('Email atau password salah');
+    }
+    
+    storage.saveCurrentUser(user);
+    return user;
+}
+
+function logout() {
+    storage.saveCurrentUser(null);
+}
+
+function getCurrentUser() {
+    return storage.getCurrentUser();
+}
+
+// ==================== TRANSACTION FUNCTIONS ====================
+function getTransactions(userId) {
+    const allTransactions = storage.getTransactions();
+    return allTransactions.filter(t => t.userId === userId);
+}
+
+function addTransaction(transaction) {
+    const transactions = storage.getTransactions();
+    const newTransaction = {
+        ...transaction,
+        id: Date.now().toString()
+    };
+    transactions.push(newTransaction);
+    storage.saveTransactions(transactions);
+    return newTransaction;
+}
+
+function deleteTransaction(id) {
+    const transactions = storage.getTransactions();
+    const filtered = transactions.filter(t => t.id !== id);
+    storage.saveTransactions(filtered);
+}
+
+// ==================== UI COMPONENTS ====================
 let currentUser = null;
 let allTransactions = [];
 let expenseChart = null;
@@ -62,8 +156,8 @@ function formatRupiah(angka) {
     }).format(angka);
 }
 
-function formatDate(timestamp) {
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+function formatDate(dateString) {
+    const date = new Date(dateString);
     return date.toLocaleDateString('id-ID', {
         day: 'numeric',
         month: 'long',
@@ -82,7 +176,7 @@ function updateDashboard() {
     let totalPengeluaran = 0;
     
     allTransactions.forEach(trans => {
-        const transDate = trans.tanggal.toDate ? trans.tanggal.toDate() : new Date(trans.tanggal);
+        const transDate = new Date(trans.tanggal);
         const isCurrentMonth = transDate.getMonth() === currentMonth && transDate.getFullYear() === currentYear;
         
         if (trans.jenis === 'pemasukan') {
@@ -109,7 +203,7 @@ function updateChart() {
     
     allTransactions.forEach(trans => {
         if (trans.jenis === 'pengeluaran') {
-            const transDate = trans.tanggal.toDate ? trans.tanggal.toDate() : new Date(trans.tanggal);
+            const transDate = new Date(trans.tanggal);
             if (transDate.getMonth() === currentMonth && transDate.getFullYear() === currentYear) {
                 const current = kategoriMap.get(trans.kategori) || 0;
                 kategoriMap.set(trans.kategori, current + trans.nominal);
@@ -166,7 +260,7 @@ function renderHistory() {
     const keyword = searchKeyword.value.toLowerCase();
     if (keyword) {
         filtered = filtered.filter(t => 
-            t.keterangan.toLowerCase().includes(keyword) || 
+            (t.keterangan && t.keterangan.toLowerCase().includes(keyword)) || 
             t.kategori.toLowerCase().includes(keyword)
         );
     }
@@ -175,7 +269,7 @@ function renderHistory() {
     if (filterMonth.value) {
         const [year, month] = filterMonth.value.split('-');
         filtered = filtered.filter(t => {
-            const transDate = t.tanggal.toDate ? t.tanggal.toDate() : new Date(t.tanggal);
+            const transDate = new Date(t.tanggal);
             return transDate.getFullYear() === parseInt(year) && transDate.getMonth() === parseInt(month) - 1;
         });
     }
@@ -186,11 +280,7 @@ function renderHistory() {
     }
     
     // Sort by date desc
-    filtered.sort((a, b) => {
-        const dateA = a.tanggal.toDate ? a.tanggal.toDate() : new Date(a.tanggal);
-        const dateB = b.tanggal.toDate ? b.tanggal.toDate() : new Date(b.tanggal);
-        return dateB - dateA;
-    });
+    filtered.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
     
     if (filtered.length === 0) {
         historyList.innerHTML = `
@@ -219,58 +309,42 @@ function renderHistory() {
             <div class="transaction-amount ${trans.jenis}">
                 ${trans.jenis === 'pemasukan' ? '+' : '-'} ${formatRupiah(trans.nominal)}
             </div>
-            <button class="btn-delete" onclick="window.deleteTransaction('${trans.id}')">
+            <button class="btn-delete" onclick="window.deleteTransactionHandler('${trans.id}')">
                 <i class="fas fa-trash-alt"></i>
             </button>
         </div>
     `).join('');
 }
 
-// Delete Transaction
-window.deleteTransaction = async (id) => {
+// Delete Transaction Handler
+window.deleteTransactionHandler = async (id) => {
     if (confirm('Apakah Anda yakin ingin menghapus transaksi ini?')) {
         showLoading();
         try {
-            await deleteDoc(doc(db, 'transactions', id));
-            // Data akan otomatis update melalui listener
+            deleteTransaction(id);
+            loadUserData();
+            alert('Transaksi berhasil dihapus!');
         } catch (error) {
             console.error('Error deleting transaction:', error);
-            alert('Gagal menghapus transaksi');
+            alert('Gagal menghapus transaksi: ' + error.message);
         } finally {
             hideLoading();
         }
     }
 };
 
-// Setup Real-time Listener
-function setupRealtimeListener() {
+// Load User Data
+function loadUserData() {
     if (!currentUser) return;
     
-    const q = query(
-        collection(db, 'transactions'),
-        where('userId', '==', currentUser.uid),
-        orderBy('tanggal', 'desc')
-    );
-    
-    onSnapshot(q, (snapshot) => {
-        allTransactions = [];
-        snapshot.forEach(doc => {
-            allTransactions.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
-        
-        updateDashboard();
-        renderHistory();
-        updateChart();
-    }, (error) => {
-        console.error('Error getting transactions:', error);
-    });
+    allTransactions = getTransactions(currentUser.id);
+    updateDashboard();
+    renderHistory();
+    updateChart();
 }
 
 // Add Transaction
-async function addTransaction(event) {
+async function addTransactionHandler(event) {
     event.preventDefault();
     
     if (!currentUser) {
@@ -291,28 +365,29 @@ async function addTransaction(event) {
     }
     
     const transaction = {
-        userId: currentUser.uid,
+        userId: currentUser.id,
         jenis: currentJenis,
         kategori: kategoriSelect.value,
         nominal: nominal,
-        tanggal: new Date(tanggal),
+        tanggal: tanggal,
         keterangan: keteranganInput.value || '-',
-        createdAt: new Date()
+        createdAt: new Date().toISOString()
     };
     
     showLoading();
     try {
-        await addDoc(collection(db, 'transactions'), transaction);
+        addTransaction(transaction);
         
         // Reset form
         nominalInput.value = '';
         keteranganInput.value = '';
-        tanggalInput.value = new Date().toISOString().split('T')[0];
+        setDefaultDate();
         
+        loadUserData();
         alert('Transaksi berhasil ditambahkan!');
     } catch (error) {
         console.error('Error adding transaction:', error);
-        alert('Gagal menambahkan transaksi');
+        alert('Gagal menambahkan transaksi: ' + error.message);
     } finally {
         hideLoading();
     }
@@ -335,8 +410,10 @@ function setupJenisToggle() {
         Array.from(kategoriSelect.options).forEach(opt => {
             if (opt.parentElement.label === 'Pemasukan') {
                 opt.disabled = false;
+                opt.style.display = '';
             } else {
                 opt.disabled = true;
+                opt.style.display = 'none';
             }
         });
         kategoriSelect.value = 'Gaji';
@@ -351,15 +428,14 @@ function setupJenisToggle() {
         Array.from(kategoriSelect.options).forEach(opt => {
             if (opt.parentElement.label === 'Pengeluaran') {
                 opt.disabled = false;
+                opt.style.display = '';
             } else {
                 opt.disabled = true;
+                opt.style.display = 'none';
             }
         });
         kategoriSelect.value = 'Makanan';
     });
-    
-    // Trigger initial
-    jenisPemasukanBtn.click();
 }
 
 // Setup filter listeners
@@ -391,91 +467,75 @@ function setupAuthTabs() {
     });
 }
 
-async function handleLogin(email, password) {
+function handleLogin(email, password) {
     showLoading();
     try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        console.log('Login success:', userCredential.user.email);
-    } catch (error) {
-        console.error('Login error:', error);
-        alert(error.message === 'Firebase: Error (auth/invalid-credential).' 
-            ? 'Email atau password salah' 
-            : error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-async function handleRegister(name, email, password) {
-    if (password.length < 6) {
-        alert('Password minimal 6 karakter');
-        return;
-    }
-    
-    showLoading();
-    try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, { displayName: name });
-        console.log('Register success:', userCredential.user.email);
-    } catch (error) {
-        console.error('Register error:', error);
-        if (error.message.includes('email-already-in-use')) {
-            alert('Email sudah terdaftar, silakan login');
-        } else {
-            alert(error.message);
-        }
-    } finally {
-        hideLoading();
-    }
-}
-
-async function handleGoogleLogin() {
-    showLoading();
-    try {
-        await signInWithPopup(auth, googleProvider);
-        console.log('Google login success');
-    } catch (error) {
-        console.error('Google login error:', error);
-        alert('Gagal login dengan Google');
-    } finally {
-        hideLoading();
-    }
-}
-
-async function handleLogout() {
-    showLoading();
-    try {
-        await signOut(auth);
-        console.log('Logout success');
-    } catch (error) {
-        console.error('Logout error:', error);
-        alert('Gagal logout');
-    } finally {
-        hideLoading();
-    }
-}
-
-// Auth State Observer
-onAuthStateChanged(auth, (user) => {
-    if (user) {
+        const user = login(email, password);
         currentUser = user;
         authContainer.classList.add('hidden');
         appContainer.classList.remove('hidden');
-        userNameEl.textContent = user.displayName || user.email.split('@')[0];
-        
-        // Setup realtime listener
-        setupRealtimeListener();
-    } else {
+        userNameEl.textContent = user.name || user.email.split('@')[0];
+        loadUserData();
+        console.log('Login success:', user.email);
+    } catch (error) {
+        console.error('Login error:', error);
+        alert(error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+function handleRegister(name, email, password) {
+    showLoading();
+    try {
+        register(name, email, password);
+        alert('Pendaftaran berhasil! Silakan login.');
+        // Switch to login tab
+        document.querySelector('[data-tab="login"]').click();
+        // Clear register form
+        document.getElementById('registerName').value = '';
+        document.getElementById('registerEmail').value = '';
+        document.getElementById('registerPassword').value = '';
+    } catch (error) {
+        console.error('Register error:', error);
+        alert(error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+function handleGoogleLogin() {
+    alert('Fitur Google Login akan segera hadir! Silakan gunakan registrasi biasa dulu.');
+}
+
+function handleLogout() {
+    showLoading();
+    try {
+        logout();
         currentUser = null;
         authContainer.classList.remove('hidden');
         appContainer.classList.add('hidden');
         allTransactions = [];
-        
-        // Reset form
-        if (transactionForm) transactionForm.reset();
-        setDefaultDate();
+        console.log('Logout success');
+    } catch (error) {
+        console.error('Logout error:', error);
+        alert('Gagal logout: ' + error.message);
+    } finally {
+        hideLoading();
     }
-});
+}
+
+// Check existing session
+function checkSession() {
+    const savedUser = getCurrentUser();
+    if (savedUser) {
+        currentUser = savedUser;
+        authContainer.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+        userNameEl.textContent = currentUser.name || currentUser.email.split('@')[0];
+        loadUserData();
+    }
+}
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
@@ -483,6 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupJenisToggle();
     setupFilters();
     setupAuthTabs();
+    checkSession();
     
     // Auth form submissions
     const loginForm = document.getElementById('loginForm');
@@ -518,6 +579,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     if (transactionForm) {
-        transactionForm.addEventListener('submit', addTransaction);
+        transactionForm.addEventListener('submit', addTransactionHandler);
     }
 });
