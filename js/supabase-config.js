@@ -1,18 +1,24 @@
-// Installasi: Tidak perlu install, langsung pakai CDN
+// Konfigurasi Supabase
+// Ganti dengan kredensial Supabase Anda dari https://supabase.com
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Ganti dengan kredensial Supabase Anda
-const supabaseUrl = 'https://YOUR_PROJECT.supabase.co'
-const supabaseAnonKey = 'YOUR_ANON_KEY'
+// TODO: Ganti dengan URL dan anon key dari project Supabase Anda
+const supabaseUrl = 'https://YOUR_PROJECT_SUPABASE_URL.supabase.co'
+const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY'
 
+// Inisialisasi Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Helper functions
+// Helper functions untuk autentikasi
 export async function signUp(email, password, name) {
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { name } }
+        options: {
+            data: {
+                full_name: name
+            }
+        }
     })
     return { data, error }
 }
@@ -27,7 +33,10 @@ export async function signIn(email, password) {
 
 export async function signInWithGoogle() {
     const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google'
+        provider: 'google',
+        options: {
+            redirectTo: window.location.origin
+        }
     })
     return { data, error }
 }
@@ -37,12 +46,19 @@ export async function signOut() {
     return { error }
 }
 
+export async function getCurrentUser() {
+    const { data: { user }, error } = await supabase.auth.getUser()
+    return { user, error }
+}
+
+// Helper functions untuk transaksi
 export async function getTransactions(userId) {
     const { data, error } = await supabase
         .from('transactions')
         .select('*')
         .eq('user_id', userId)
         .order('tanggal', { ascending: false })
+    
     return { data, error }
 }
 
@@ -51,6 +67,7 @@ export async function addTransaction(transaction) {
         .from('transactions')
         .insert([transaction])
         .select()
+    
     return { data, error }
 }
 
@@ -59,13 +76,24 @@ export async function deleteTransaction(id) {
         .from('transactions')
         .delete()
         .eq('id', id)
+    
     return { error }
+}
+
+export async function updateTransaction(id, updates) {
+    const { data, error } = await supabase
+        .from('transactions')
+        .update(updates)
+        .eq('id', id)
+        .select()
+    
+    return { data, error }
 }
 
 // Real-time subscription
 export function subscribeToTransactions(userId, callback) {
-    return supabase
-        .channel('transactions')
+    const subscription = supabase
+        .channel('transactions-channel')
         .on(
             'postgres_changes',
             {
@@ -74,7 +102,17 @@ export function subscribeToTransactions(userId, callback) {
                 table: 'transactions',
                 filter: `user_id=eq.${userId}`
             },
-            callback
+            (payload) => {
+                console.log('Change received!', payload)
+                callback(payload)
+            }
         )
         .subscribe()
+    
+    return subscription
+}
+
+// Fungsi untuk unsubscribe
+export function unsubscribeFromTransactions(subscription) {
+    supabase.removeChannel(subscription)
 }
